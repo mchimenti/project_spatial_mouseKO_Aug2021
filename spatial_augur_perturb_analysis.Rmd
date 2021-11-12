@@ -1,0 +1,303 @@
+---
+title: "Augur Perturbation Analysis: Purkinje cells MANF KO Slide 1"
+output: html_document
+author: Michael Chimenti
+date: 10.28.21
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, warning=FALSE, message=FALSE}
+library(Seurat)
+library(Augur)
+library(tidyverse)
+library(patchwork)
+library(hdf5r)
+```
+
+## Sample 1 and 2 
+
+
+```{r, load_vis, message=FALSE, results=FALSE, eval=FALSE}
+setwd('~/collab_proj/wen_wen/project_spatial_mouseKO_Aug2021')
+s1 <- Load10X_Spatial(data.dir = 'sample1', filename = 'filtered_feature_bc_matrix.h5', filter.matrix = TRUE, assay = "Spatial")
+s2 <- Load10X_Spatial(data.dir = 'sample2', filename = 'filtered_feature_bc_matrix.h5', filter.matrix = TRUE, assay = "Spatial")
+```
+
+```{r, sctransform, warning=FALSE, message=FALSE, results=FALSE, eval=FALSE}
+
+### Integrate S1 and S2 
+
+s1$orig.ident <- "s1_cntrl"
+s2$orig.ident <- "s2_knock"
+
+#######
+st.list <- list(control=s1,knockout=s2)
+#######
+
+st.list <- lapply(st.list, SCTransform, assay = "Spatial", method = "qpoisson")
+options(future.globals.maxSize = 2000 * 1024^2) 
+st.features = SelectIntegrationFeatures(st.list, nfeatures = 3000, verbose = FALSE)
+st.list <- PrepSCTIntegration(object.list = st.list, anchor.features = st.features, 
+    verbose = FALSE)
+int.anchors <- FindIntegrationAnchors(object.list = st.list, normalization.method = "SCT", 
+    verbose = FALSE, anchor.features = st.features)
+
+######
+s1s2.int <- IntegrateData(anchorset = int.anchors, normalization.method = "SCT", 
+    verbose = FALSE)
+
+########
+rm(int.anchors, st.list)
+gc()
+
+
+```
+
+```{r, dim_red, eval=FALSE}
+s1s2.int = s1s2.int %>%
+# Run principal component analysis
+RunPCA(npcs = 50, verbose = F) %>%
+# Embed in two dimensions
+RunUMAP(dims = 1:50, do.fast = T)
+
+```
+
+### Clustering
+
+**"Augur requires that cell types be present across experimental conditions in order to perform cell-type prioritization. This integration step ensures that the data are aligned across conditions, meaning that cells cluster by cell type rather than by condition, and thereby promote the accurate identification of cell-type clusters."**
+
+https://www.nature.com/articles/s41596-021-00561-x?proof=t#Sec27
+
+```{r, clust, eval=TRUE}
+
+setwd('~/collab_proj/wen_wen/project_spatial_mouseKO_Aug2021')
+###########
+#saveRDS(s1s2.int, file = "s1_s2_integrated.rds")  ## Object saved; Note: Update this object before final report.  
+###########
+
+
+s1s2.int <- readRDS("s1_s2_integrated.rds")
+########
+s1s2.int = s1s2.int %>%
+FindNeighbors(dims = 1:10) %>%
+FindClusters(resolution = 0.4)
+########
+
+DimPlot(s1s2.int, reduction = "umap", group.by = c("ident", "orig.ident"))
+FeaturePlot(s1s2.int, features="Calb1", cols = c("Blue", "Red"))
+SpatialFeaturePlot(s1s2.int, features = "Calb1")
+SpatialDimPlot(s1s2.int, group.by = c("ident"), alpha = 0.7, cols = "Paired", label = TRUE)
+```
+
+### Cell type annotation 
+
+#### Sample 1/2 integrated: 
+Purkinje: Cluster 5
+Molecular Layer: Cluster 4
+Granular Layer: Cluster 3
+White Matter : Cluster 6
+Deep Cerebellar Nuclei: 0,2
+Quadra Geminal Plate: 1,9
+BrainStem: 8
+Choroid Plexus: 10
+
+```{r, rename_idents, eval = FALSE}
+s1s2.int = RenameIdents(s1s2.int,
+`5` = "Purkinje",
+`4` = "MolecularLayer",
+`3` = "GranularLayer",
+`6` = "WhiteMatter",
+`0` = "DeepCerNuc",
+`1` = "QuadGemPlate",
+`2` = "DeepCerNuc",
+`7` = "DeepCerNuc",
+`9` = "QuadGenPlate",
+`8` = "BrainnStem",
+`10` = "ChoroidPlexus")
+
+# Add cell type annotations into the metadata of the Seurat object
+s1s2.int$cell_type = Idents(s1s2.int)
+```
+
+### Cell-type prioritization 
+
+"We found that although varying the number of trees minimally affects the relative rankings of the various cell types, this parameter effectively controls the dynamic range of AUCs obtained in any given dataset. Because cell-type prioritization is most effective when the distribution of AUCs spans a wide range, we recommend increasing the number of trees in scenarios where all AUCs are close to 0.5 (for instance, cells undergoing an exceptionally subtle perturbation, or very sparsely sequenced datasets), and decreasing the number of trees when all AUCs are close to 1."
+
+https://www.nature.com/articles/s41596-021-00561-x?proof=t#Sec47
+
+```{r, celltype_priority, fig.height=7,fig.width=7,dpi=200, eval=FALSE}
+
+DefaultAssay(s1s2.int) <- "SCT"
+augur <- Augur::calculate_auc(s1s2.int, label_col = "orig.ident", cell_type_col = "cell_type", 
+                              n_threads = 6, 
+                              rf_params = list(trees = 15, mtry = 2, min_n = NULL, importance = "accuracy"),
+                              n_subsamples = 25,
+                              )
+```
+
+```{r, viz_augur}
+augur$AUC
+p1 <- plot_umap(augur, s1s2.int, mode = "default", palette = "Spectral")
+p1 <- p1 + geom_point(size=0.1) + ggtitle("Augur Perturbation by Type (Red = Most)")
+p2 <- DimPlot(s1s2.int, reduction = "umap", group.by = "cell_type") + ggtitle("S1/S2 Integrated Cell Types")
+p1 + p2 
+
+### Transfer AUC results into Seurat Object for plotting
+auc_tab <- augur$AUC
+auc_tab$rank <- c(1:9)
+tib <- s1s2.int$cell_type %>% as_tibble(rownames = "Barcode") %>% rename(cell_type=value)
+tib <- tib %>% left_join(., auc_tab)
+s1s2.int$AUC <- tib$auc 
+s1s2.int$RANK <- tib$rank
+SpatialDimPlot(s1s2.int, group.by = "RANK", cols = "Paired")
+
+#####
+
+
+```
+
+
+## Sample 3 and 4
+
+```{r, load_vis, message=FALSE, results=FALSE, eval=FALSE}
+setwd('~/collab_proj/wen_wen/project_spatial_mouseKO_Aug2021')
+
+s3 <- Load10X_Spatial(data.dir = 'sample3', filename = 'filtered_feature_bc_matrix.h5', filter.matrix = TRUE, assay = "Spatial")
+s4 <- Load10X_Spatial(data.dir = 'sample4', filename = 'filtered_feature_bc_matrix.h5', filter.matrix = TRUE, assay = "Spatial")
+s3$orig.ident <- "s3_cntrl"
+s4$orig.ident <- "s4_knock"
+
+#######
+st.list <- list(control=s3,knockout=s4)
+#######
+
+st.list <- lapply(st.list, SCTransform, assay = "Spatial", method = "qpoisson")
+options(future.globals.maxSize = 2000 * 1024^2) 
+st.features = SelectIntegrationFeatures(st.list, nfeatures = 3000, verbose = FALSE)
+st.list <- PrepSCTIntegration(object.list = st.list, anchor.features = st.features, 
+    verbose = FALSE)
+int.anchors <- FindIntegrationAnchors(object.list = st.list, normalization.method = "SCT", 
+    verbose = FALSE, anchor.features = st.features)
+
+######
+s3s4.int <- IntegrateData(anchorset = int.anchors, normalization.method = "SCT", 
+    verbose = FALSE)
+########
+rm(int.anchors, st.list)
+gc()
+
+
+```
+
+
+```{r, dim_red, eval=FALSE}
+########
+s3s4.int = s3s4.int %>%
+########  
+  
+# Run principal component analysis
+RunPCA(npcs = 30, verbose = F) %>%
+# Embed in two dimensions
+RunUMAP(dims = 1:20, do.fast = T)
+
+```
+
+
+```{r, clust, eval=FALSE}
+
+########
+s3s4.int = s3s4.int %>%
+FindNeighbors(dims = 1:10) %>%
+FindClusters(resolution = 0.4)
+########
+
+DimPlot(s3s4.int, reduction = "umap", group.by = c("ident", "orig.ident"))
+FeaturePlot(s3s4.int, features="Calb1", cols = c("blue","red"))
+SpatialFeaturePlot(s3s4.int, features = "Calb1")
+SpatialDimPlot(s3s4.int, group.by = c("ident"), alpha = 0.7, cols = "Paired", label = TRUE)
+
+```
+
+Wen Wen's interpretation of the slide clusters: 
+
+0: Quadra Geminal Plate
+1: white matter (based on slice 1.1)
+2: granular layer
+3: Quadra Geminal Plate
+4: Molecular layer
+5: white matter
+6: Purkinje cell layer
+7: Deep Cerebellar Nuclei (based on slice 1.1)
+8: Deep Cerebellar Nuclei (based on slice 1.1)
+9: brain stem
+10: Choroid Plexus
+11: part of the cortex?
+12: ?
+13: brain stem
+
+```{r, celltype_prior_34}
+#########
+#setwd('~/collab_proj/wen_wen/project_spatial_mouseKO_Aug2021')
+saveRDS(s3s4.int, file = "s3_s4_integrated.rds")
+#s3s4.int <- readRDS("s3_s4_integrated.rds")
+
+s3s4.int = RenameIdents(s3s4.int,
+`6` = "Purkinje",
+`4` = "MolecularLayer",
+`2` = "GranularLayer",
+`10` = "ChoroidPlexus",
+`1` = "White Matter",
+`7` = "DCN",
+`8` = "DCN",
+`9` = "Brain Stem",
+`11` = "Unk",
+`12` = "Unk",
+`13` = "Brain Stem")
+
+# Add cell type annotations into the metadata of the Seurat object
+s3s4.int$cell_type = Idents(s3s4.int)
+DefaultAssay(s3s4.int) <- "SCT"
+
+augur34 <- Augur::calculate_auc(s3s4.int, label_col = "orig.ident", cell_type_col = "cell_type", 
+                              n_threads = 6, 
+                              rf_params = list(trees = 25, mtry = 2, min_n = NULL, importance = "accuracy"),
+                              n_subsamples = 40,
+                              )
+
+
+```
+
+```{r, viz_augur}
+augur34$AUC
+
+### Transfer AUC results into Seurat Object for plotting
+auc_tab <- augur34$AUC
+auc_tab$rank <- c(1:9)
+tib <- s3s4.int$cell_type %>% as_tibble(rownames = "Barcode") %>% rename(cell_type=value)
+tib <- tib %>% left_join(., auc_tab)
+s3s4.int$AUC <- round(tib$auc, 3) 
+s3s4.int$RANK <- tib$rank
+
+assertthat::are_equal(colnames(s3s4.int), tib$Barcode)
+
+SpatialDimPlot(s3s4.int, group.by = "AUC", cols = rev(c("#D73027", "#F46D43", "#FDAE61", "#FEE090", "#FFFFBF", "#E0F3F8", "#ABD9E9", "#74ADD1", "#4575B4")))
+
+#####
+
+p1 <- plot_umap(augur34, s3s4.int, mode = "default", palette = "Spectral")
+p1 <- p1 + geom_point(size=0.2) + ggtitle("Augur Perturbation by Type (Red = Most)")
+
+
+p2 <- DimPlot(s3s4.int, reduction = "umap", group.by = "cell_type") + ggtitle("Sample 3/4 integrated Cell Types")
+p1 + p2
+```
+
+```{r, sesh}
+sessionInfo()
+```
+
+
+

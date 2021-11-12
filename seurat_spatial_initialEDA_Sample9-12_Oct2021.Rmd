@@ -1,0 +1,165 @@
+---
+title: "Seurat Visium Spatial Analysis: Samples 9-12, Slide 3"
+output: html_document
+author: Michael Chimenti
+date: 10.15.21
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, warning=FALSE, message=FALSE}
+library(Seurat)
+library(SeuratData)
+library(tidyverse)
+library(patchwork)
+library(dplyr)
+library(scater)
+#library(conflicted)
+```
+### Introduction 
+
+Background and Specific Aim: MANF is an endoplasmic reticulum (ER) stress inducible neurotrophic factor which is involved in the regulation of cellular stress in various pathological conditions. Although MANF is a potential neurotrophic factor, the mechanism underlying its function is far from understood. We have generated a transgenic mice line with cerebellum Purkinje cell specific MANF knockout (KO). Our data showed that MANF knockout does not make any morphological difference in Purkinje cells when compared to the control, but MANF deficient Purkinje cells are more prone to alcohol induced cell damage. Interestingly, Purkinje cell death and shrinkage were only observed in alcohol treated female KO cerebellum (especially in cerebellum lobule II), but not in male (data unpublished). We anticipated that there might be a gender specific transcriptional change in MANF deficient Purkinje cells that render the female KO Purkinje cells more vulnerable to alcohol. To identify such gender specific MANF interacting genes we would like to use spatial transcriptomics analysis to examine gene expression in both genders of control and KO mice cerebellum.
+
+### Experimental design 
+
+	Samples: 12 total, sagittal section of the cerebellum from 5 months old mice.               Male Control n=3; Male KO n=3; Female Control n=3; Female KO n=3.
+	
+### Analysis plan 
+
+Analysis: First, we would like to ask how does MANF deficiency affect gene expression in the male cerebellum, especially the Purkinje cells. We will compare male control v.s. male KO groups. We hope to identify a list of male candidate genes that are differentially expressed in male control and KO cerebellum with spatial information.
+
+Then, we would like to do the similar analysis in the females. We will compare female control v.s. female KO groups. We hope to identify a list of female genes that are differentially expressed in female control and KO cerebellum with spatial information.
+	
+Finally, and most importantly, we would like to compare the male and female lists to find common and uncommon genes in the two lists. The uncommon genes between the two lists will be candidate genes that are affected by MANF deficiency with a gender difference.
+	
+Once we completed these analyses, we hope to identify a list of gender differentially expressed genes that are affected by MANF deficiency. It will help us to explain the gender specific alcohol toxicity to the female KO Purkinje cells.
+	
+	
+### Sample metadata
+
+Slide 1	V10N16-064	
+sample 1	A1	Male ctrl 1
+sample 2	B1	Male KO 1
+sample 3	C1	Female ctrl 1
+sample 4	D1	Female KO 1
+		
+		
+		
+Slide 2	V11F09-106	
+Sample 5	A1	Male ctrl 2
+Sample 6	B1	Male KO 2
+Sample 7	C1	Female ctrl 2
+Sample 8	D1	Female KO 2
+		
+		
+		
+Slide 3	V11F09-081	
+Sample 9	A1	Male ctrl 3
+Sample 10	B1	Male KO 3
+Sample 11	C1	Female ctrl 3
+Sample 12	D1	Female KO 3
+
+### Importing and visualizing data and slides for Male Ctrl 3 and KO 3
+
+```{r, load_vis}
+setwd('~/collab_proj/wen_wen/project_spatial_mouseKO_Aug2021')
+
+s9 <- Load10X_Spatial(data.dir = 'sample9', filename = 'filtered_feature_bc_matrix.h5', filter.matrix = TRUE, assay = "Spatial")
+
+s10 <- Load10X_Spatial(data.dir = 'sample10', filename = 'filtered_feature_bc_matrix.h5', filter.matrix = TRUE, assay = "Spatial")
+
+s11 <- Load10X_Spatial(data.dir = 'sample11', filename = 'filtered_feature_bc_matrix.h5', filter.matrix = TRUE, assay = "Spatial")
+
+s12 <- Load10X_Spatial(data.dir = 'sample12', filename = 'filtered_feature_bc_matrix.h5', filter.matrix = TRUE, assay = "Spatial")
+
+
+s9$orig.ident <- "sample9"
+
+plot1 <- VlnPlot(s9, features = "nCount_Spatial", pt.size = 0.1) + NoLegend()
+plot2 <- SpatialFeaturePlot(s9, features = "nCount_Spatial") + theme(legend.position = "right")
+wrap_plots(plot1, plot2)
+
+s10$orig.ident <- "sample10"
+
+plot1 <- VlnPlot(s10, features = "nCount_Spatial", pt.size = 0.1) + NoLegend()
+plot2 <- SpatialFeaturePlot(s10, features = "nCount_Spatial") + theme(legend.position = "right")
+wrap_plots(plot1, plot2)
+
+s11$orig.ident <- "sample11"
+
+plot1 <- VlnPlot(s11, features = "nCount_Spatial", pt.size = 0.1) + NoLegend()
+plot2 <- SpatialFeaturePlot(s11, features = "nCount_Spatial") + theme(legend.position = "right")
+wrap_plots(plot1, plot2)
+
+s12$orig.ident <- "sample12"
+
+plot1 <- VlnPlot(s12, features = "nCount_Spatial", pt.size = 0.1) + NoLegend()
+plot2 <- SpatialFeaturePlot(s12, features = "nCount_Spatial") + theme(legend.position = "right")
+wrap_plots(plot1, plot2)
+
+```
+
+### Normalize and transform 
+
+```{r, sctransform, warning=FALSE, message=FALSE, results=FALSE}
+s9 <- SCTransform(s9, assay = "Spatial", verbose = TRUE, method = "qpoisson")
+s10 <- SCTransform(s10, assay = "Spatial", verbose = TRUE, method = "qpoisson")
+s11 <- SCTransform(s11, assay = "Spatial", verbose = TRUE, method = "qpoisson")
+s12 <- SCTransform(s12, assay = "Spatial", verbose = TRUE, method = "qpoisson")
+
+```
+
+### PCA, clustering, and uMAP analysis 
+
+```{r, dim_clust, message=FALSE,results=FALSE}
+s9 <- RunPCA(s9, assay = "SCT", verbose=FALSE)
+s9 <- FindNeighbors(s9, reduction = "pca", dims = 1:30)
+s9 <- FindClusters(s9, verbose = FALSE)
+s9 <- RunUMAP(s9, reduction = "pca", dims = 1:30)
+
+s10 <- RunPCA(s10, assay = "SCT", verbose=FALSE)
+s10 <- FindNeighbors(s10, reduction = "pca", dims = 1:30)
+s10 <- FindClusters(s10, verbose = FALSE)
+s10 <- RunUMAP(s10, reduction = "pca", dims = 1:30)
+
+s11 <- RunPCA(s11, assay = "SCT", verbose=FALSE)
+s11 <- FindNeighbors(s11, reduction = "pca", dims = 1:30)
+s11 <- FindClusters(s11, verbose = FALSE)
+s11 <- RunUMAP(s11, reduction = "pca", dims = 1:30)
+
+s12 <- RunPCA(s12, assay = "SCT", verbose=FALSE)
+s12 <- FindNeighbors(s12, reduction = "pca", dims = 1:30)
+s12 <- FindClusters(s12, verbose = FALSE)
+s12 <- RunUMAP(s12, reduction = "pca", dims = 1:30)
+
+```
+
+### Visualize uMAP and spatial clusters 
+
+```{r, vis_uMAP, fig.width=7}
+p1 <- DimPlot(s9, reduction = "umap", label = TRUE)
+p2 <- SpatialDimPlot(s9, label=TRUE, label.size = 3)
+p1 + p2
+
+p1 <- DimPlot(s10, reduction = "umap", label = TRUE)
+p2 <- SpatialDimPlot(s10, label=TRUE, label.size = 3)
+p1 + p2
+
+
+p1 <- DimPlot(s11, reduction = "umap", label = TRUE)
+p2 <- SpatialDimPlot(s11, label=TRUE, label.size = 3)
+p1 + p2
+
+
+p1 <- DimPlot(s12, reduction = "umap", label = TRUE)
+p2 <- SpatialDimPlot(s12, label=TRUE, label.size = 3)
+p1 + p2
+
+```
+
+```{r, sessionInfo}
+sessionInfo()
+
+```

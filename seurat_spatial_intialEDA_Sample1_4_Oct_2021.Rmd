@@ -1,0 +1,236 @@
+---
+title: "Seurat Visium Spatial Analysis: Samples 1-4, Slide 1 V10N16-064 "
+output: html_document
+author: Michael Chimenti
+date: 09.02.21
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, warning=FALSE, message=FALSE}
+library(Seurat)
+library(SeuratData)
+library(tidyverse)
+library(patchwork)
+library(dplyr)
+library(scater)
+#library(conflicted)
+```
+### Introduction 
+
+Background and Specific Aim: MANF is an endoplasmic reticulum (ER) stress inducible neurotrophic factor which is involved in the regulation of cellular stress in various pathological conditions. Although MANF is a potential neurotrophic factor, the mechanism underlying its function is far from understood. We have generated a transgenic mice line with cerebellum Purkinje cell specific MANF knockout (KO). Our data showed that MANF knockout does not make any morphological difference in Purkinje cells when compared to the control, but MANF deficient Purkinje cells are more prone to alcohol induced cell damage. Interestingly, Purkinje cell death and shrinkage were only observed in alcohol treated female KO cerebellum (especially in cerebellum lobule II), but not in male (data unpublished). We anticipated that there might be a gender specific transcriptional change in MANF deficient Purkinje cells that render the female KO Purkinje cells more vulnerable to alcohol. To identify such gender specific MANF interacting genes we would like to use spatial transcriptomics analysis to examine gene expression in both genders of control and KO mice cerebellum.
+
+### Experimental design 
+
+	Samples: 12 total, sagittal section of the cerebellum from 5 months old mice.               Male Control n=3; Male KO n=3; Female Control n=3; Female KO n=3.
+	
+### Analysis plan 
+
+Analysis: First, we would like to ask how does MANF deficiency affect gene expression in the male cerebellum, especially the Purkinje cells. We will compare male control v.s. male KO groups. We hope to identify a list of male candidate genes that are differentially expressed in male control and KO cerebellum with spatial information.
+
+Then, we would like to do the similar analysis in the females. We will compare female control v.s. female KO groups. We hope to identify a list of female genes that are differentially expressed in female control and KO cerebellum with spatial information.
+	
+Finally, and most importantly, we would like to compare the male and female lists to find common and uncommon genes in the two lists. The uncommon genes between the two lists will be candidate genes that are affected by MANF deficiency with a gender difference.
+	
+Once we completed these analyses, we hope to identify a list of gender differentially expressed genes that are affected by MANF deficiency. It will help us to explain the gender specific alcohol toxicity to the female KO Purkinje cells.
+	
+	
+### Sample metadata
+
+Slide 1	V10N16-064	
+sample 1	A1	Male ctrl 1
+sample 2	B1	Male KO 1
+sample 3	C1	Female ctrl 1
+sample 4	D1	Female KO 1
+		
+		
+		
+Slide 2	V11F09-106	
+Sample 5	A1	Male ctrl 2
+Sample 6	B1	Male KO 2
+Sample 7	C1	Female ctrl 2
+Sample 8	D1	Female KO 2
+		
+		
+		
+Slide 3	V11F09-081	
+Sample 9	A1	Male ctrl 3
+Sample 10	B1	Male KO 3
+Sample 11	C1	Female ctrl 3
+Sample 12	D1	Female KO 3
+
+### Importing and visualizing data and slides for Male Ctrl 1 and KO 1
+
+```{r, load_vis}
+setwd('~/collab_proj/wen_wen/project_spatial_mouseKO_Aug2021')
+
+s1 <- Load10X_Spatial(data.dir = 'sample1', filename = 'filtered_feature_bc_matrix.h5', filter.matrix = TRUE, assay = "Spatial")
+
+s2 <- Load10X_Spatial(data.dir = 'sample2', filename = 'filtered_feature_bc_matrix.h5', filter.matrix = TRUE, assay = "Spatial")
+
+s3 <- Load10X_Spatial(data.dir = 'sample3', filename = 'filtered_feature_bc_matrix.h5', filter.matrix = TRUE, assay = "Spatial")
+
+s4 <- Load10X_Spatial(data.dir = 'sample4', filename = 'filtered_feature_bc_matrix.h5', filter.matrix = TRUE, assay = "Spatial")
+
+
+s1$orig.ident <- "sample1"
+
+plot1 <- VlnPlot(s1, features = "nCount_Spatial", pt.size = 0.1) + NoLegend()
+plot2 <- SpatialFeaturePlot(s1, features = "nCount_Spatial") + theme(legend.position = "right")
+wrap_plots(plot1, plot2)
+
+s2$orig.ident <- "sample2"
+
+plot1 <- VlnPlot(s2, features = "nCount_Spatial", pt.size = 0.1) + NoLegend()
+plot2 <- SpatialFeaturePlot(s2, features = "nCount_Spatial") + theme(legend.position = "right")
+wrap_plots(plot1, plot2)
+
+s3$orig.ident <- "sample3"
+
+plot1 <- VlnPlot(s3, features = "nCount_Spatial", pt.size = 0.1) + NoLegend()
+plot2 <- SpatialFeaturePlot(s3, features = "nCount_Spatial") + theme(legend.position = "right")
+wrap_plots(plot1, plot2)
+
+s4$orig.ident <- "sample4"
+
+plot1 <- VlnPlot(s4, features = "nCount_Spatial", pt.size = 0.1) + NoLegend()
+plot2 <- SpatialFeaturePlot(s4, features = "nCount_Spatial") + theme(legend.position = "right")
+wrap_plots(plot1, plot2)
+
+#### NOTE: Need to add % mito calculation for mouse here 
+#### This is human, need to figure out mouse 
+### pbmc <- PercentageFeatureSet(pbmc, pattern = "^MT-", col.name = "percent.mt")
+ 
+```
+
+### Normalize and transform 
+
+```{r, sctransform, warning=FALSE, message=FALSE}
+s1 <- SCTransform(s1, assay = "Spatial", verbose = TRUE, method = "qpoisson")
+s2 <- SCTransform(s2, assay = "Spatial", verbose = TRUE, method = "qpoisson")
+s3 <- SCTransform(s3, assay = "Spatial", verbose = TRUE, method = "qpoisson")
+s4 <- SCTransform(s4, assay = "Spatial", verbose = TRUE, method = "qpoisson")
+
+```
+
+
+### Visualize features by expression  
+ 
+```{r, gex_viz}
+
+SpatialFeaturePlot(s1, features = c("Hpca", "Ttr"))
+SpatialFeaturePlot(s2, features = c("Hpca", "Ttr"))
+SpatialFeaturePlot(s3, features = c("Hpca", "Ttr"))
+SpatialFeaturePlot(s4, features = c("Hpca", "Ttr"))
+
+## Ctrl (left) and KO (right)
+p1 <- SpatialFeaturePlot(s1, features = "Manf", max.cutoff = 3)
+p2 <- SpatialFeaturePlot(s2, features = "Manf", max.cutoff = 3)
+p1 + p2
+
+p3 <- SpatialFeaturePlot(s3, features = "Manf", min.cutoff = 0, max.cutoff = 3)
+p4 <- SpatialFeaturePlot(s4, features = "Manf", min.cutoff = 0, max.cutoff = 3)
+p3 + p4
+
+```
+
+### PCA, clustering, and uMAP analysis 
+
+```{r, dim_clust}
+s1 <- RunPCA(s1, assay = "SCT", verbose=FALSE)
+s1 <- FindNeighbors(s1, reduction = "pca", dims = 1:30)
+s1 <- FindClusters(s1, verbose = FALSE)
+s1 <- RunUMAP(s1, reduction = "pca", dims = 1:30)
+
+s2 <- RunPCA(s2, assay = "SCT", verbose=FALSE)
+s2 <- FindNeighbors(s2, reduction = "pca", dims = 1:30)
+s2 <- FindClusters(s2, verbose = FALSE)
+s2 <- RunUMAP(s2, reduction = "pca", dims = 1:30)
+
+s3 <- RunPCA(s3, assay = "SCT", verbose=FALSE)
+s3 <- FindNeighbors(s3, reduction = "pca", dims = 1:30)
+s3 <- FindClusters(s3, verbose = FALSE)
+s3 <- RunUMAP(s3, reduction = "pca", dims = 1:30)
+
+s4 <- RunPCA(s4, assay = "SCT", verbose=FALSE)
+s4 <- FindNeighbors(s4, reduction = "pca", dims = 1:30)
+s4 <- FindClusters(s4, verbose = FALSE)
+s4 <- RunUMAP(s4, reduction = "pca", dims = 1:30)
+
+```
+
+### Visualize uMAP and spatial clusters 
+
+```{r, vis_uMAP, fig.width=7}
+p1 <- DimPlot(s1, reduction = "umap", label = TRUE)
+p2 <- SpatialDimPlot(s1, label=TRUE, label.size = 3)
+p1 + p2
+
+p1 <- DimPlot(s2, reduction = "umap", label = TRUE)
+p2 <- SpatialDimPlot(s2, label=TRUE, label.size = 3)
+p1 + p2
+
+
+p1 <- DimPlot(s3, reduction = "umap", label = TRUE)
+p2 <- SpatialDimPlot(s3, label=TRUE, label.size = 3)
+p1 + p2
+
+
+p1 <- DimPlot(s4, reduction = "umap", label = TRUE)
+p2 <- SpatialDimPlot(s4, label=TRUE, label.size = 3)
+p1 + p2
+
+```
+
+```{r, spatial_cluster_plots}
+SpatialDimPlot(s1, cells.highlight = CellsByIdentities(object = s1, idents = c(5,9,8,13,15)), facet.highlight = TRUE, ncol = 3)
+SpatialDimPlot(s2, cells.highlight = CellsByIdentities(object = s2, idents = c(6,7,3,2,5)), facet.highlight = TRUE, ncol = 3)
+SpatialDimPlot(s3, cells.highlight = CellsByIdentities(object = s3, idents = c(4,14,6,3)), facet.highlight = TRUE, ncol = 3)
+SpatialDimPlot(s4, cells.highlight = CellsByIdentities(object = s4, idents = c(3,9,4,6)), facet.highlight = TRUE, ncol = 3)
+
+```
+
+### Merging two related samples 
+
+
+sample 1	A1	Male ctrl 1
+sample 2	B1	Male KO 1
+sample 3	C1	Female ctrl 1
+sample 4	D1	Female KO 1
+
+```{r, merge_slides}
+male_1 <- merge(s1,s2)
+DefaultAssay(male_1) <- "SCT"
+VariableFeatures(male_1) <- c(VariableFeatures(s1), VariableFeatures(s2))
+male_1 <- RunPCA(male_1, verbose = FALSE)
+male_1 <- FindNeighbors(male_1, dims = 1:30)
+male_1 <- FindClusters(male_1, verbose = FALSE, resolution = 0.5)
+male_1 <- RunUMAP(male_1, dims = 1:30)
+
+female_1 <- merge(s3,s4)
+DefaultAssay(female_1) <- "SCT"
+VariableFeatures(female_1) <- c(VariableFeatures(s3), VariableFeatures(s4))
+female_1 <- RunPCA(female_1, verbose = FALSE)
+female_1 <- FindNeighbors(female_1, dims = 1:50)
+female_1 <- FindClusters(female_1, verbose = TRUE, resolution = 0.5)
+female_1 <- RunUMAP(female_1, dims = 1:30)
+```
+
+```{r, merged_dimplot, dpi=200,fig.width=9}
+DimPlot(male_1, reduction= "umap", group.by = c("ident","orig.ident"))
+DimPlot(female_1, reduction="umap", group.by = c("ident", "orig.ident"))
+
+SpatialDimPlot(male_1)
+SpatialDimPlot(female_1)
+
+SpatialFeaturePlot(male_1, features = c("Manf"))
+SpatialFeaturePlot(female_1, features = c("Manf"))
+```
+
+
+```{r, seshInfo}
+sessionInfo()
+```
+

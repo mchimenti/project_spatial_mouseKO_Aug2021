@@ -1,0 +1,394 @@
+---
+title: "Seurat Spatia Purkinje cell DE analysis: Samples 9-12, Slide 3"
+output: html_document
+author: Michael Chimenti
+date: 10.25.21
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, warning=FALSE, message=FALSE}
+library(Seurat)
+library(SeuratData)
+library(tidyverse)
+library(patchwork)
+library(dplyr)
+library(scater)
+#library(conflicted)
+```
+
+### Introduction 
+
+Background and Specific Aim: MANF is an endoplasmic reticulum (ER) stress inducible neurotrophic factor which is involved in the regulation of cellular stress in various pathological conditions. Although MANF is a potential neurotrophic factor, the mechanism underlying its function is far from understood. We have generated a transgenic mice line with cerebellum Purkinje cell specific MANF knockout (KO). Our data showed that MANF knockout does not make any morphological difference in Purkinje cells when compared to the control, but MANF deficient Purkinje cells are more prone to alcohol induced cell damage. Interestingly, Purkinje cell death and shrinkage were only observed in alcohol treated female KO cerebellum (especially in cerebellum lobule II), but not in male (data unpublished). We anticipated that there might be a gender specific transcriptional change in MANF deficient Purkinje cells that render the female KO Purkinje cells more vulnerable to alcohol. To identify such gender specific MANF interacting genes we would like to use spatial transcriptomics analysis to examine gene expression in both genders of control and KO mice cerebellum.
+
+### Experimental design 
+
+	Samples: 12 total, sagittal section of the cerebellum from 5 months old mice.               Male Control n=3; Male KO n=3; Female Control n=3; Female KO n=3.
+	
+### Analysis plan 
+
+Analysis: First, we would like to ask how does MANF deficiency affect gene expression in the male cerebellum, especially the Purkinje cells. We will compare male control v.s. male KO groups. We hope to identify a list of male candidate genes that are differentially expressed in male control and KO cerebellum with spatial information.
+
+Then, we would like to do the similar analysis in the females. We will compare female control v.s. female KO groups. We hope to identify a list of female genes that are differentially expressed in female control and KO cerebellum with spatial information.
+	
+Finally, and most importantly, we would like to compare the male and female lists to find common and uncommon genes in the two lists. The uncommon genes between the two lists will be candidate genes that are affected by MANF deficiency with a gender difference.
+	
+Once we completed these analyses, we hope to identify a list of gender differentially expressed genes that are affected by MANF deficiency. It will help us to explain the gender specific alcohol toxicity to the female KO Purkinje cells.
+	
+### Sample metadata
+
+Slide 1	V10N16-064	
+sample 1	A1	Male ctrl 1
+sample 2	B1	Male KO 1
+sample 3	C1	Female ctrl 1
+sample 4	D1	Female KO 1
+		
+### Aims
+
+The aim of this document is to go beyond the exploratory analysis to identify and extract the Purkinje cell clusters in each sample, and perform DE gene testing between case and control.  For this, we need to integrate the Cntrl and KO samples from each male and female.  
+		
+Calbindin (calb1) is a Purkinje cell type marker and can help us ID this one-cell layer in the Cerebellum.  
+
+### Importing and visualizing data and slides for Male Ctrl 1 and KO 1
+
+```{r, load_vis, message=FALSE, results=FALSE}
+setwd('~/collab_proj/wen_wen/project_spatial_mouseKO_Aug2021')
+
+s9 <- Load10X_Spatial(data.dir = 'sample9', filename = 'filtered_feature_bc_matrix.h5', filter.matrix = TRUE, assay = "Spatial")
+
+s10 <- Load10X_Spatial(data.dir = 'sample10', filename = 'filtered_feature_bc_matrix.h5', filter.matrix = TRUE, assay = "Spatial")
+
+s11 <- Load10X_Spatial(data.dir = 'sample11', filename = 'filtered_feature_bc_matrix.h5', filter.matrix = TRUE, assay = "Spatial")
+
+s12 <- Load10X_Spatial(data.dir = 'sample12', filename = 'filtered_feature_bc_matrix.h5', filter.matrix = TRUE, assay = "Spatial")
+
+s9$orig.ident <- "Male_CNTRL"
+s10$orig.ident <- "Male_KO"
+
+s11$orig.ident <- "Female_CNTRL"
+s12$orig.ident <- "Female_KO"
+```
+
+
+### Filtering and QC 
+
+```{r, filter, fig.height=9, dpi=200}
+
+
+##########  VISUALIZE s9
+s9 <- PercentageFeatureSet(s9, "^mt-", col.name = "percent_mito")
+s9 <- PercentageFeatureSet(s9, "^Hb.*-", col.name = "percent_hb")
+
+
+VlnPlot(s9, features = c("nCount_Spatial", "nFeature_Spatial", "percent_mito", 
+    "percent_hb"), pt.size = 0.1, ncol = 2) + NoLegend()
+
+SpatialFeaturePlot(s9, features = c("nCount_Spatial", "nFeature_Spatial", "percent_mito", 
+    "percent_hb"))
+
+FeatureScatter(s9, feature1="nFeature_Spatial", feature2="percent_mito")
+
+########### VISUALIZE s10
+
+s10 <- PercentageFeatureSet(s10, "^mt-", col.name = "percent_mito")
+s10 <- PercentageFeatureSet(s10, "^Hb.*-", col.name = "percent_hb")
+
+VlnPlot(s10, features = c("nCount_Spatial", "nFeature_Spatial", "percent_mito", 
+    "percent_hb"), pt.size = 0.1, ncol = 2) + NoLegend()
+
+FeatureScatter(s10, feature1="nFeature_Spatial", feature2="percent_mito")
+
+SpatialFeaturePlot(s10, features = c("nCount_Spatial", "nFeature_Spatial", "percent_mito", 
+    "percent_hb"))
+
+########### VISUALIZE s11
+
+s11 <- PercentageFeatureSet(s11, "^mt-", col.name = "percent_mito")
+s11 <- PercentageFeatureSet(s11, "^Hb.*-", col.name = "percent_hb")
+
+VlnPlot(s11, features = c("nCount_Spatial", "nFeature_Spatial", "percent_mito", 
+    "percent_hb"), pt.size = 0.1, ncol = 2) + NoLegend()
+
+FeatureScatter(s11, feature1="nFeature_Spatial", feature2="percent_mito")
+
+SpatialFeaturePlot(s11, features = c("nCount_Spatial", "nFeature_Spatial", "percent_mito", 
+    "percent_hb"))
+
+
+########### VISUALIZE s12
+
+s12 <- PercentageFeatureSet(s12, "^mt-", col.name = "percent_mito")
+s12 <- PercentageFeatureSet(s12, "^Hb.*-", col.name = "percent_hb")
+
+VlnPlot(s12, features = c("nCount_Spatial", "nFeature_Spatial", "percent_mito", 
+    "percent_hb"), pt.size = 0.1, ncol = 2) + NoLegend()
+
+FeatureScatter(s12, feature1="nFeature_Spatial", feature2="percent_mito")
+
+SpatialFeaturePlot(s12, features = c("nCount_Spatial", "nFeature_Spatial", "percent_mito", 
+    "percent_hb"))
+
+
+
+s11 <- PercentageFeatureSet(s11, "^mt-", col.name = "percent_mito")
+s11 <- PercentageFeatureSet(s11, "^Hb.*-", col.name = "percent_hb")
+
+s12 <- PercentageFeatureSet(s12, "^mt-", col.name = "percent_mito")
+s12 <- PercentageFeatureSet(s12, "^Hb.*-", col.name = "percent_hb")
+
+
+###########  FILTER 
+#s9 <- subset(s9, subset = nFeature_Spatial > 750 & percent_mito < 32)
+#s10 <- subset(s10, subset = nFeature_Spatial > 750 & percent_mito < 32)
+#s11 <- subset(s11, subset = nFeature_Spatial > 750 & percent_mito < 32)
+#s12 <- subset(s12, subset = nFeature_Spatial > 750 & percent_mito < 32)
+
+
+```
+
+"nFeatures" and "percent mito" here look to be biological features rather than artifacts.  I am going to be very lax with thresholding for this reason. 
+
+
+
+### Normalize and transform 
+
+```{r, sctransform, warning=FALSE, message=FALSE, results=FALSE}
+s9 <- SCTransform(s9, assay = "Spatial", verbose = TRUE, method = "qpoisson")
+s10 <- SCTransform(s10, assay = "Spatial", verbose = TRUE, method = "qpoisson")
+s11 <- SCTransform(s11, assay = "Spatial", verbose = TRUE, method = "qpoisson")
+s12 <- SCTransform(s12, assay = "Spatial", verbose = TRUE, method = "qpoisson")
+
+```
+
+### PCA, clustering, and uMAP analysis 
+
+```{r, dim_clust}
+s9 <- RunPCA(s9, assay = "SCT", verbose=FALSE)
+s9 <- FindNeighbors(s9, reduction = "pca", dims = 1:30)
+s9 <- FindClusters(s9, verbose = FALSE)
+s9 <- RunUMAP(s9, reduction = "pca", dims = 1:30)
+
+s10 <- RunPCA(s10, assay = "SCT", verbose=FALSE)
+s10 <- FindNeighbors(s10, reduction = "pca", dims = 1:30)
+s10 <- FindClusters(s10, verbose = FALSE)
+s10 <- RunUMAP(s10, reduction = "pca", dims = 1:30)
+
+s11 <- RunPCA(s11, assay = "SCT", verbose=FALSE)
+s11 <- FindNeighbors(s11, reduction = "pca", dims = 1:30)
+s11 <- FindClusters(s11, verbose = FALSE)
+s11 <- RunUMAP(s11, reduction = "pca", dims = 1:30)
+
+s12 <- RunPCA(s12, assay = "SCT", verbose=FALSE)
+s12 <- FindNeighbors(s12, reduction = "pca", dims = 1:30)
+s12 <- FindClusters(s12, verbose = FALSE)
+s12 <- RunUMAP(s12, reduction = "pca", dims = 1:30)
+
+```
+
+### Visualize uMAP and spatial clusters 
+
+Here, we mainly want to ID the Purkinje cell clusters in each sample.  
+
+```{r, vis_uMAP, fig.width=12, fig.height=14, dpi=200}
+#p1 <- DimPlot(s9, reduction = "umap", label = TRUE)
+p1 <- SpatialDimPlot(s9, label=TRUE, label.size = 3, pt.size.factor = 1.2) + ggtitle("Sample 9: M/Cntrl")
+
+#p1 <- DimPlot(s10, reduction = "umap", label = TRUE)
+p2 <- SpatialDimPlot(s10, label=TRUE, label.size = 3, pt.size.factor = 1.2) + ggtitle("Sample 10: M/KO")
+
+#p1 <- DimPlot(s11, reduction = "umap", label = TRUE)
+p3 <- SpatialDimPlot(s11, label=TRUE, label.size = 3, pt.size.factor = 1.2) + ggtitle("Sample 11: F/Cntrl")
+
+#p1 <- DimPlot(s12, reduction = "umap", label = TRUE)
+p4 <- SpatialDimPlot(s12, label=TRUE, label.size = 3, pt.size.factor = 1.2) + ggtitle("Sample 12: F/KO")
+
+p1 + p2 + p3 + p4 +  plot_layout(widths  = c(4,4),heights = c(4,4), ncol=2)
+
+```
+
+Let's check the distribution of calbindin to provide more evidence: 
+
+```{r, spatial_feature_plot}
+p5 <- SpatialFeaturePlot(s9, features = c("Calb1"), alpha = c(0.1,1))
+p1 + p5
+
+p6 <- SpatialFeaturePlot(s10, features = c("Calb1"), alpha = c(0.1,1))
+p2 + p6
+
+p7 <- SpatialFeaturePlot(s11, features = c("Calb1"), alpha = c(0.1,1))
+p3 + p7
+
+p8 <- SpatialFeaturePlot(s12, features = c("Calb1"), alpha = c(0.1,1))
+p4 + p8
+```
+
+
+Based on these plots, I would assign the cells as: 
+
+Sample 9: Molecular layer (3;magenta), Granular layer (2; yellow), Purkinje layer(5;blue)
+Sample 10: Molecular layer (2;yellow), Granular layer (5;blue), Purkinje layer (7;black)
+Sample 11: Purkinje (4;cyan), Molecular layer (2;gray), Granular layer (6;blue)
+Sample 12: ??
+
+
+### Visualizing only the Purkinje cells 
+
+```{r, spatial_cluster_plots}
+p1 <- SpatialDimPlot(s9, cells.highlight = CellsByIdentities(object = s9, idents = c(5)), facet.highlight = TRUE) + ggtitle("Sample9, Male/Cntrl")
+p2 <- SpatialDimPlot(s10, cells.highlight = CellsByIdentities(object = s10, idents = c(7)), facet.highlight = TRUE) + ggtitle("Sample10, Male/KO")
+p3 <- SpatialDimPlot(s11, cells.highlight = CellsByIdentities(object = s11, idents = c(4)), facet.highlight = TRUE) + ggtitle("Sample11, Female/Cntrl")
+p4 <- SpatialDimPlot(s12, cells.highlight = CellsByIdentities(object = s12, idents = c(3)), facet.highlight = TRUE) + ggtitle("Sample12, Female/KO")
+
+p1 + p2
+p3 + p4
+
+```
+
+
+### Top DE genes in Purkinje cell clusters by sample 
+
+Sample 1:  Cluster 4 (yellow)
+Sample 2:  Cluster 7 (cyan)
+Sample 3:  Cluster 6 (gray)
+Sample 4:  Cluster 9 (magenta)
+
+```{r, findMarkersPurkinje}
+
+purk_markers_s9 <- FindMarkers(s9, ident.1 = "4")
+purk_markers_s10 <- FindMarkers(s10, ident.1 = "7")
+purk_markers_s11 <- FindMarkers(s11, ident.1 = "6")
+purk_markers_s12 <- FindMarkers(s12, ident.1 = "9")
+
+
+```
+
+
+#### Top 25 DE genes (markers) Purkinje cells Slide 1, Male Cntrl
+```{r, markers9}
+library(kableExtra)
+head(purk_markers_s9, 25) %>% kable() %>% kable_styling()
+```
+
+#### Top 25 DE genes (markers) Purkinje cells Slide 1, Male KO
+```{r, markers10}
+head(purk_markers_s10, 25) %>% kable() %>% kable_styling()
+```
+
+#### Top 25 DE genes (markers) Purkinje cells Slide 1, FeMale Cntrl
+```{r, markers11}
+head(purk_markers_s11, 25) %>% kable() %>% kable_styling()
+```
+
+#### Top 25 DE genes (markers) Purkinje cells Slide 1, FEMale KO
+```{r, markers12}
+head(purk_markers_s12, 25) %>% kable() %>% kable_styling()
+```
+
+
+### Subsetting the region of interest and merging Cntrl and KO regions 
+
+Here, I am subsetting the purkinje cells and the cell types in close proximity to them in the slides. My hope is that by subsetting and reclustering, we can get a better view of the effect of KO and also M/F differences.  
+
+```{r, subset}
+s9_sub <- subset(s9, idents = c(0,3,4,5,8))
+s10_sub <- subset(s10, idents = c(1,4,6,7))
+s11_sub <- subset(s11, idents = c(2,3,4,6))
+s12_sub <- subset(s12, idents = c(3,4,6,9))
+
+s9_sub$orig.ident <- "Male_CNTRL"
+s10_sub$orig.ident <- "Male_KO"
+
+s11_sub$orig.ident <- "Female_CNTRL"
+s12_sub$orig.ident <- "Female_KO"
+
+```
+
+
+In this section, we are "merging" the cntrl and KO data together.  This *does not* integrate the data, in the sense of transformation into a common space using anchors.  I prefer this merging approach because it is a "lighter touch" on the data (less manipulation).  Since the data come from 4 capture areas of the same slide, I think the chances of a batch effect are reduced.  Differences we see here are more likely owing to real biological effects.  
+
+```{r, merged_dimplot, dpi=200, fig.width=8, fig.height=8}
+
+
+s9_s10.merge <- merge(s9_sub,s10_sub)
+s11_s12.merge <- merge(s11_sub,s12_sub)
+
+DefaultAssay(s9_s10.merge) <- "SCT"
+VariableFeatures(s9_s10.merge) <- c(VariableFeatures(s9_sub), VariableFeatures(s10_sub))
+s9_s10.merge <- RunPCA(s9_s10.merge, verbose = FALSE)
+s9_s10.merge <- FindNeighbors(s9_s10.merge, dims = 1:30)
+s9_s10.merge <- FindClusters(s9_s10.merge, verbose = FALSE)
+s9_s10.merge <- RunUMAP(s9_s10.merge, dims = 1:30)#
+
+DefaultAssay(s11_s12.merge) <- "SCT"
+VariableFeatures(s11_s12.merge) <- c(VariableFeatures(s11_sub), VariableFeatures(s11_sub))
+s11_s12.merge <- RunPCA(s11_s12.merge, verbose = FALSE)
+s11_s12.merge <- FindNeighbors(s11_s12.merge, dims = 1:30)#
+s11_s12.merge <- FindClusters(s11_s12.merge, verbose = FALSE)
+s11_s12.merge <- RunUMAP(s11_s12.merge, dims = 1:30)
+```
+
+### UMAP and Spatial plots of merged Cntrl/KO pairs in M/F 
+
+#### Male, Slide 1
+
+```{r, merged_dim_plot_Male, dpi=200, fig.width=8, fig.height=10}
+
+### UMAP plot of the merged and reclustered data in Slide 1, Male CNTRL vs KO 
+p1 <- DimPlot(s9_s10.merge, reduction= "umap", group.by = c("ident","orig.ident"), label = TRUE)
+
+p2 <- FeaturePlot(s9_s10.merge, features="Calb1")
+
+p1 + p2 + plot_layout(ncol = 1, widths = 5, heights = 7)
+
+
+p3 <- SpatialDimPlot(s9_s10.merge)
+p4 <- SpatialFeaturePlot(s9_s10.merge, features = "Calb1")
+p5 <- SpatialFeaturePlot(s9_s10.merge, features = "Manf")
+
+#### Spatial UMAP plot 
+p3
+
+#### Spatial expression heatmap of Manf and Calb1 
+p4 
+p5
+
+#### Vlnplot comparing Manf expression in Purkinje clusters Cntrl/KO 
+VlnPlot(s9_s10.merge, features="Manf", assay = "SCT", idents = c(3), group.by = "orig.ident")
+```
+
+#### Female, Slide 1
+
+```{r, merged_dimplot_female, dpi=200, fig.width=8, fig.height=8}
+
+### UMAP plot of the merged and reclustered data in Slide 1, Male CNTRL vs KO 
+p1 <- DimPlot(s11_s12.merge, reduction= "umap", group.by = c("ident","orig.ident"), label = TRUE)
+
+p2 <- FeaturePlot(s11_s12.merge, features="Calb1")
+
+p1 + p2 + plot_layout(ncol = 1, widths = 5, heights = 7)
+
+
+p3 <- SpatialDimPlot(s11_s12.merge)
+p4 <- SpatialFeaturePlot(s11_s12.merge, features = "Calb1")
+p5 <- SpatialFeaturePlot(s11_s12.merge, features = "Manf")
+
+#### Spatial UMAP plot 
+p3
+
+#### Spatial expression heatmap of Manf and Calb1 
+p4 
+p5
+
+#### Vlnplot comparing Manf expression in Purkinje clusters Cntrl/KO 
+VlnPlot(s11_s12.merge, features="Manf", assay = "SCT", idents = c(1,6), group.by = "orig.ident")
+
+```
+
+
+```{r, sessionInfo}
+sessionInfo()
+
+```
+
